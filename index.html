@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Archive Planner</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg-color: #faf8f5; --text-color: #333; --accent-color: #8c7b6c; --line-color: #e0ddd9; }
+        body { font-family: 'Apple SD Gothic Neo', sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
+        .container { max-width: 480px; margin: 0 auto; background: white; padding: 30px 25px; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); }
+       
+        /* 날짜 이동 컨트롤러 */
+        .date-controller { display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 30px; }
+        .nav-btn { background: none; border: none; font-size: 1.5rem; color: var(--accent-color); cursor: pointer; padding: 10px; }
+        .date-display { text-align: center; }
+        .date-main { font-size: 1.5rem; font-weight: 800; color: var(--accent-color); margin-bottom: 2px; }
+        .date-sub { font-size: 0.8rem; color: #999; letter-spacing: 1px; }
+
+        .section-title { font-weight: bold; font-size: 0.85rem; margin-top: 25px; margin-bottom: 12px; color: var(--accent-color); display: flex; align-items: center; text-transform: uppercase; }
+        .section-title::after { content: ""; flex: 1; margin-left: 12px; border-bottom: 1px dashed var(--line-color); }
+       
+        input[type="text"] { width: 100%; padding: 12px; border: 1px solid #f5f5f5; border-radius: 10px; box-sizing: border-box; background: #fafafa; margin-bottom: 10px; font-size: 0.9rem; outline: none; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.95rem; }
+        input[type="checkbox"] { margin-right: 12px; width: 18px; height: 18px; accent-color: var(--accent-color); }
+       
+        .meal-item { margin-bottom: 8px; }
+        .meal-label { font-size: 0.65rem; color: #aaa; margin-left: 5px; margin-bottom: 3px; display: block; }
+
+        .health-footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #f8f8f8; }
+        .inbody-card { display: flex; justify-content: space-between; background: #fdfbf9; padding: 15px; border-radius: 15px; border: 1px solid #f0ede9; cursor: pointer; }
+        .inbody-val { font-size: 0.9rem; font-weight: bold; }
+        #chart-container { display: none; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 날짜 이동 기능 -->
+        <div class="date-controller">
+            <button class="nav-btn" onclick="changeDate(-1)">&#10094;</button>
+            <div class="date-display">
+                <div class="date-main" id="display-date"></div>
+                <div class="date-sub" id="display-day"></div>
+            </div>
+            <button class="nav-btn" onclick="changeDate(1)">&#10095;</button>
+        </div>
+
+        <div id="planner-content">
+            <div class="section-title">Morning</div>
+            <input type="text" placeholder="아침 계획..." onkeypress="handleEnter(event, 'morning')">
+            <ul id="list-morning"></ul>
+
+            <div class="section-title">Afternoon</div>
+            <input type="text" placeholder="오후 계획..." onkeypress="handleEnter(event, 'afternoon')">
+            <ul id="list-afternoon"></ul>
+
+            <div class="section-title">Evening</div>
+            <input type="text" placeholder="저녁 마무리..." onkeypress="handleEnter(event, 'evening')">
+            <ul id="list-evening"></ul>
+
+            <div class="section-title">Meal Log</div>
+            <div class="meal-item"><span class="meal-label">Breakfast</span><input type="text" id="meal-bf" oninput="saveCurrentData()"></div>
+            <div class="meal-item"><span class="meal-label">Lunch</span><input type="text" id="meal-lc" oninput="saveCurrentData()"></div>
+            <div class="meal-item"><span class="meal-label">Dinner</span><input type="text" id="meal-dn" oninput="saveCurrentData()"></div>
+        </div>
+
+        <div class="health-footer">
+            <div class="inbody-card" onclick="toggleChart()">
+                <div style="text-align:center"><span style="font-size:0.6rem; color:#aaa">체중</span><div class="inbody-val">55.1kg</div></div>
+                <div style="text-align:center"><span style="font-size:0.6rem; color:#aaa">근육</span><div class="inbody-val">22.0kg</div></div>
+                <div style="text-align:center"><span style="font-size:0.6rem; color:#aaa">지방</span><div class="inbody-val">26.9%</div></div>
+            </div>
+            <div id="chart-container"><canvas id="healthChart"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        let currentDate = new Date();
+
+        window.onload = () => {
+            renderPage();
+        };
+
+        function renderPage() {
+            updateDateDisplay();
+            loadDateData();
+        }
+
+        function updateDateDisplay() {
+            const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+            document.getElementById('display-date').innerText = currentDate.toLocaleDateString('ko-KR').replace(/ /g, '').slice(0, -1);
+            document.getElementById('display-day').innerText = days[currentDate.getDay()];
+        }
+
+        function changeDate(offset) {
+            currentDate.setDate(currentDate.getDate() + offset);
+            renderPage();
+        }
+
+        function handleEnter(event, type) {
+            if (event.key === 'Enter' && event.target.value.trim() !== '') {
+                addTodoItem(type, event.target.value, false);
+                event.target.value = '';
+                saveCurrentData();
+            }
+        }
+
+        function addTodoItem(type, text, checked) {
+            const ul = document.getElementById(`list-${type}`);
+            const li = document.createElement('li');
+            li.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''} onclick="saveCurrentData()"> <span>${text}</span>`;
+            ul.appendChild(li);
+        }
+
+        function saveCurrentData() {
+            const dateKey = currentDate.toLocaleDateString('en-CA'); // YYYY-MM-DD 형식
+            const data = {
+                morning: getListData('list-morning'),
+                afternoon: getListData('list-afternoon'),
+                evening: getListData('list-evening'),
+                meals: [
+                    document.getElementById('meal-bf').value,
+                    document.getElementById('meal-lc').value,
+                    document.getElementById('meal-dn').value
+                ]
+            };
+            localStorage.setItem(`data_${dateKey}`, JSON.stringify(data));
+        }
+
+        function getListData(id) {
+            return Array.from(document.getElementById(id).children).map(li => ({
+                text: li.querySelector('span').innerText,
+                checked: li.querySelector('input').checked
+            }));
+        }
+
+        function loadDateData() {
+            // 초기화
+            ['morning', 'afternoon', 'evening'].forEach(t => document.getElementById(`list-${t}`).innerHTML = '');
+           
+            const dateKey = currentDate.toLocaleDateString('en-CA');
+            const saved = localStorage.getItem(`data_${dateKey}`);
+           
+            if (saved) {
+                const data = JSON.parse(saved);
+                data.morning.forEach(i => addTodoItem('morning', i.text, i.checked));
+                data.afternoon.forEach(i => addTodoItem('afternoon', i.text, i.checked));
+                data.evening.forEach(i => addTodoItem('evening', i.text, i.checked));
+                document.getElementById('meal-bf').value = data.meals[0] || '';
+                document.getElementById('meal-lc').value = data.meals[1] || '';
+                document.getElementById('meal-dn').value = data.meals[2] || '';
+            } else {
+                document.getElementById('meal-bf').value = '';
+                document.getElementById('meal-lc').value = '';
+                document.getElementById('meal-dn').value = '';
+            }
+        }
+
+        function toggleChart() {
+            const container = document.getElementById('chart-container');
+            container.style.display = container.style.display === 'block' ? 'none' : 'block';
+            if (container.style.display === 'block') renderChart();
+        }
+
+        function renderChart() {
+            const ctx = document.getElementById('healthChart').getContext('2d');
+            if(window.myChart) window.myChart.destroy();
+            window.myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 30}, (_, i) => i + 1),
+                    datasets: [
+                        { label: '체중', data: Array.from({length: 30}, () => 55 + Math.random()), borderColor: '#5d544b', pointRadius: 0, tension: 0.3 },
+                        { label: '근육', data: Array.from({length: 30}, () => 21 + Math.random()), borderColor: '#8c7b6c', pointRadius: 0, tension: 0.3 }
+                    ]
+                },
+                options: { plugins: { legend: { display: false } }, scales: { x: { display: false } } }
+            });
+        }
+    </script>
+</body>
+</html>
