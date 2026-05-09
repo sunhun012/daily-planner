@@ -47,7 +47,7 @@
         .inbody-label { font-size: 11px; color: #888; }
         .inbody-input { text-align: center; font-weight: bold; font-size: 16px; width: 100%; border: none; background: transparent; outline: none; }
 
-        .chart-box { height: 200px; margin-top: 20px; }
+        .chart-box { height: 250px; margin-top: 20px; }
         .save-btn {
             width: 100%; margin-top: 20px; padding: 18px; border-radius: 15px;
             border: none; background-color: #333; color: white; font-weight: bold; cursor: pointer;
@@ -67,6 +67,7 @@
         <div id="quoteDisplay" class="quote-area"></div>
     </div>
 
+    <!-- 할 일 섹션 -->
     <div class="section-title">아침</div>
     <div class="todo-container">
         <input type="text" class="todo-input" placeholder="계획 입력 후 엔터..." onkeypress="addTodo(event, 'mor')">
@@ -85,11 +86,13 @@
         <div id="list_eve"></div>
     </div>
 
+    <!-- 식단 섹션 -->
     <div class="section-title">식단</div>
     <div class="input-box"><input type="text" id="meal_brk" placeholder="아침 식사"></div>
     <div class="input-box"><input type="text" id="meal_lun" placeholder="점심 식사"></div>
     <div class="input-box"><input type="text" id="meal_din" placeholder="저녁 식사"></div>
 
+    <!-- 인바디 섹션 -->
     <div class="inbody-grid">
         <div class="inbody-item">
             <span class="inbody-label">체중</span>
@@ -110,16 +113,17 @@
 
     <button class="save-btn" onclick="saveData()">오늘의 기록 저장하기</button>
 
-    <div class="section-title">최근 7일 체중 변화</div>
+    <!-- 통합 변화 그래프 -->
+    <div class="section-title">최근 7일 신체 변화</div>
     <div class="chart-box">
-        <canvas id="weightChart"></canvas>
+        <canvas id="bodyChart"></canvas>
     </div>
 </div>
 
 <script>
     let currentDate = new Date();
     let todoLists = { mor: [], aft: [], eve: [] };
-    const quotes = ["기록은 기억을 이긴다.", "작은 변화가 큰 차이를 만든다.", "오늘의 노력이 내일의 나를 만든다.", "시작이 반이다."];
+    const quotes = ["기록은 기억을 이긴다.", "작은 변화가 큰 차이를 만든다.", "오늘의 노력이 내일의 나를 만든다.", "생각은 머물게 하고, 기록은 나아가게 한다."];
 
     function updateDisplay() {
         const y = currentDate.getFullYear();
@@ -129,10 +133,10 @@
 
         const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
         document.getElementById('dayDisplay').innerText = dayNames[currentDate.getDay()];
-        
+       
         const key = `data_${y}-${parseInt(m)}-${parseInt(d)}`;
         const saved = JSON.parse(localStorage.getItem(key) || '{}');
-        
+       
         todoLists = saved.todoLists || { mor: [], aft: [], eve: [] };
         renderTodos();
 
@@ -149,7 +153,7 @@
 
     function jumpToDate(dateStr) { if(dateStr) { currentDate = new Date(dateStr); updateDisplay(); } }
     function changeDate(offset) { currentDate.setDate(currentDate.getDate() + offset); updateDisplay(); }
-    
+   
     function addTodo(e, type) {
         if (e.key === 'Enter' && e.target.value.trim() !== '') {
             todoLists[type].push({ text: e.target.value, completed: false });
@@ -181,9 +185,13 @@
         const d = currentDate.getDate();
         const key = `data_${y}-${m}-${d}`;
         const data = {
-            todoLists, weight: document.getElementById('weight').value,
-            muscle: document.getElementById('muscle').value, fat: document.getElementById('fat').value,
-            meal_brk: document.getElementById('meal_brk').value, meal_lun: document.getElementById('meal_lun').value, meal_din: document.getElementById('meal_din').value
+            todoLists,
+            weight: document.getElementById('weight').value,
+            muscle: document.getElementById('muscle').value,
+            fat: document.getElementById('fat').value,
+            meal_brk: document.getElementById('meal_brk').value,
+            meal_lun: document.getElementById('meal_lun').value,
+            meal_din: document.getElementById('meal_din').value
         };
         localStorage.setItem(key, JSON.stringify(data));
         alert('저장되었습니다!');
@@ -191,19 +199,40 @@
     }
 
     function renderChart() {
-        const ctx = document.getElementById('weightChart').getContext('2d');
-        const labels = []; const data = [];
+        const ctx = document.getElementById('bodyChart').getContext('2d');
+        const labels = [];
+        const weightData = [];
+        const muscleData = [];
+        const fatData = [];
+
         for (let i = 6; i >= 0; i--) {
-            const tempD = new Date(currentDate); tempD.setDate(tempD.getDate() - i);
+            const tempD = new Date(currentDate);
+            tempD.setDate(tempD.getDate() - i);
             const k = `data_${tempD.getFullYear()}-${tempD.getMonth()+1}-${tempD.getDate()}`;
             labels.push(`${tempD.getMonth()+1}/${tempD.getDate()}`);
             const s = JSON.parse(localStorage.getItem(k) || '{}');
-            data.push(s.weight || null);
+            weightData.push(s.weight || null);
+            muscleData.push(s.muscle || null);
+            fatData.push(s.fat || null);
         }
+
         if (window.myChart) window.myChart.destroy();
         window.myChart = new Chart(ctx, {
-            type: 'line', data: { labels, datasets: [{ label: '체중', data, borderColor: '#333', tension: 0.3, fill: false, spanGaps: true }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    { label: '체중(kg)', data: weightData, borderColor: '#333', tension: 0.3, fill: false, spanGaps: true },
+                    { label: '근육(kg)', data: muscleData, borderColor: '#4A90E2', tension: 0.3, fill: false, spanGaps: true },
+                    { label: '지방(%)', data: fatData, borderColor: '#E91E63', tension: 0.3, fill: false, spanGaps: true }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: { y: { beginAtZero: false } }
+            }
         });
     }
     updateDisplay();
